@@ -81,9 +81,9 @@ class DataCollator:
         # pad and truncate
         padded_genes = []
         padded_expressions = []
-        for i in range(len(examples)):
-            genes = examples[i]["genes"]
-            expressions = examples[i]["expressions"]
+        for example in examples:
+            genes = example["genes"]
+            expressions = example["expressions"]
             if self.do_binning:
                 expressions[self.keep_first_n_tokens :] = binning(
                     row=expressions[self.keep_first_n_tokens :],
@@ -128,8 +128,7 @@ class DataCollator:
         mask = torch.bernoulli(probability_matrix).bool()
         mask = mask.to(device)
 
-        masked_expressions = expressions.masked_fill(mask, self.mask_value)
-        return masked_expressions
+        return expressions.masked_fill(mask, self.mask_value)
 
     def _sample_or_truncate_plus_pad(
         self,
@@ -140,13 +139,12 @@ class DataCollator:
         assert len(genes) == len(expressions)
         if len(genes) == max_length:
             return genes, expressions
-        if len(genes) > max_length:  # sample or truncate
-            if self.sampling:
-                return self._sample(genes, expressions, max_length)
-            else:
-                return genes[:max_length], expressions[:max_length]
-        else:  # pad
+        if len(genes) <= max_length:
             return self._pad(genes, expressions, max_length)
+        if self.sampling:
+            return self._sample(genes, expressions, max_length)
+        else:
+            return genes[:max_length], expressions[:max_length]
 
     def _sample(
         self,

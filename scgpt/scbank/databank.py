@@ -119,9 +119,7 @@ class DataBank:
         """
         The main data table key.
         """
-        if self.meta_info is None:
-            return None
-        return self.meta_info.main_table_key
+        return None if self.meta_info is None else self.meta_info.main_table_key
 
     @main_table_key.setter
     def main_table_key(self, table_key: str) -> None:
@@ -165,7 +163,7 @@ class DataBank:
             DataBank: DataBank instance.
         """
 
-        if isinstance(adata, str) or isinstance(adata, Path):
+        if isinstance(adata, (str, Path)):
             import scanpy as sc
 
             adata = sc.read(adata, cache=True)
@@ -227,7 +225,7 @@ class DataBank:
         if not path.joinpath("gene_vocab.json").exists():
             logger.warning(f"DataBank at {path} does not contain gene_vocab.json.")
         data_table_files = [f for f in path.glob("*.datatable.*") if f.is_file()]
-        if len(data_table_files) == 0:
+        if not data_table_files:
             logger.warning(f"Loading empty DataBank at {path} without datatables.")
 
         db = cls(meta_info=MetaInfo.from_path(path))
@@ -355,8 +353,7 @@ class DataBank:
             indices = data.indices
             non_zero_data = data.data
 
-            tokenized_data = {"id": [], "genes": [], "expressions": []}
-            tokenized_data["id"] = list(range(n_rows))
+            tokenized_data = {"genes": [], "expressions": [], "id": list(range(n_rows))}
             for i in range(n_rows):  # ~2s/100k cells
                 row_indices = indices[indptr[i] : indptr[i + 1]]
                 row_new_indices = new_indices[row_indices]
@@ -437,9 +434,8 @@ class DataBank:
 
         if use_names is None:
             use_names = [t.name for t in new_tables]
-        else:
-            if len(use_names) != len(new_tables):
-                raise ValueError("use_names must have the same length as new_tables.")
+        elif len(use_names) != len(new_tables):
+            raise ValueError("use_names must have the same length as new_tables.")
 
         if not overwrite:
             overlaps = set(use_names) & set(self.data_tables.keys())
@@ -491,7 +487,7 @@ class DataBank:
 
         # validate matching between tokens and vocab
         tokens = adata.var[token_col].tolist()
-        match_ratio = sum([1 for t in tokens if t in self.gene_vocab]) / len(tokens)
+        match_ratio = sum(1 for t in tokens if t in self.gene_vocab) / len(tokens)
         if match_ratio < 0.9:
             raise ValueError(
                 f"{match_ratio*100:.0f}% of the tokens in adata.var[{token_col}] are not in "
@@ -698,7 +694,7 @@ def _map_ind(tokens: List[str], vocab: Mapping[str, int]) -> Mapping[int, int]:
             ind2ind[i] = vocab[t]
         else:
             unmatched_tokens.append(t)
-    if len(unmatched_tokens) > 0:
+    if unmatched_tokens:
         logger.warning(
             f"{len(unmatched_tokens)}/{len(tokens)} tokens/genes unmatched "
             "during vocabulary conversion."
@@ -728,13 +724,9 @@ def _nparray2mapped_values(
         convert_func = _nparray2indexed_values_numba
     else:
         raise ValueError(f"Unknown mode {mode}.")
-    tokenized_data = {}
     row_ids, col_inds, values = convert_func(data, new_indices)
 
-    tokenized_data["id"] = row_ids
-    tokenized_data["genes"] = col_inds
-    tokenized_data["expressions"] = values
-    return tokenized_data
+    return {"id": row_ids, "genes": col_inds, "expressions": values}
 
 
 def _nparray2indexed_values(

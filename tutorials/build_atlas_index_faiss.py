@@ -75,7 +75,7 @@ class FaissIndexBuilder:
         if self.num_workers is None:
             try:
                 self.num_workers = len(os.sched_getaffinity(0))
-                print("Number of available cores: {}".format(self.num_workers))
+                print(f"Number of available cores: {self.num_workers}")
             except Exception:
                 self.num_workers = min(10, os.cpu_count())
 
@@ -99,34 +99,32 @@ class FaissIndexBuilder:
         # Load embeddings and meta labels
         embeddings = []
         meta_labels = []
-        if self.META_FROM_EMBEDDING and self.embedding_file_suffix == ".h5ad":
-            embedding_files = (
-                list(Path(self.embedding_dir).rglob("*" + self.embedding_file_suffix))
-                if self.recursive
-                else list(
-                    Path(self.embedding_dir).glob("*" + self.embedding_file_suffix)
-                )
-            )
-            embedding_files = [str(f) for f in embedding_files]
-            embedding_files = sorted(embedding_files)
-
-            if self.num_workers > 1:
-                raise NotImplementedError
-            else:
-                for file in tqdm(
-                    embedding_files, desc="Loading embeddings and metalabels"
-                ):
-                    adata = sc.read(file)
-                    # TODO: set the embedding_key according to self.embedding_key
-                    embedding = adata.X.astype(np.float32)
-                    if not isinstance(embedding, np.ndarray):
-                        embedding = embedding.toarray().astype(np.float32)
-                    meta_label = adata.obs[self.meta_key].values
-                    embeddings.append(embedding)
-                    meta_labels.append(meta_label)
-                    del adata
-        else:
+        if not self.META_FROM_EMBEDDING or self.embedding_file_suffix != ".h5ad":
             raise NotImplementedError
+        embedding_files = (
+            list(Path(self.embedding_dir).rglob(f"*{self.embedding_file_suffix}"))
+            if self.recursive
+            else list(
+                Path(self.embedding_dir).glob(f"*{self.embedding_file_suffix}")
+            )
+        )
+        embedding_files = [str(f) for f in embedding_files]
+        embedding_files = sorted(embedding_files)
+
+        if self.num_workers > 1:
+            raise NotImplementedError
+        for file in tqdm(
+            embedding_files, desc="Loading embeddings and metalabels"
+        ):
+            adata = sc.read(file)
+            # TODO: set the embedding_key according to self.embedding_key
+            embedding = adata.X.astype(np.float32)
+            if not isinstance(embedding, np.ndarray):
+                embedding = embedding.toarray().astype(np.float32)
+            meta_label = adata.obs[self.meta_key].values
+            embeddings.append(embedding)
+            meta_labels.append(meta_label)
+            del adata
         embeddings = np.concatenate(embeddings, axis=0, dtype=np.float32)
         meta_labels = np.concatenate(meta_labels, axis=0)
 
@@ -268,9 +266,7 @@ def _auto_set_nprobe(index: faiss.Index, nprobe: int = None) -> Optional[int]:
         int: The nprobe set.
     """
 
-    # set nprobe if IVF index
-    index_ivf = faiss.try_extract_index_ivf(index)
-    if index_ivf:
+    if index_ivf := faiss.try_extract_index_ivf(index):
         nlist = index_ivf.nlist
         ori_nprobe = index_ivf.nprobe
         index_ivf.nprobe = (
@@ -301,8 +297,7 @@ def compute_category_proportion(meta_labels) -> Dict[str, float]:
         dict: A dictionary containing the proportion of each cell type in the input array.
     """
     unique_labels, counts = np.unique(meta_labels, return_counts=True)
-    category_proportion = dict(zip(unique_labels, counts / counts.sum()))
-    return category_proportion
+    return dict(zip(unique_labels, counts / counts.sum()))
 
 
 def weighted_vote(

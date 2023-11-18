@@ -14,11 +14,11 @@ VALUE_FILTER = {
 }
 # build the value filter dict for cells related with other tissues
 # since tileDB does not support `not in ` operator, we will just use `!=` to filter out the other tissues
-VALUE_FILTER["others"] = f"suspension_type != 'na' and disease == 'normal'"
+VALUE_FILTER["others"] = "suspension_type != 'na' and disease == 'normal'"
 for tissue in MAJOR_TISSUE_LIST:
     VALUE_FILTER["others"] = f"{VALUE_FILTER['others']} and (tissue_general != '{tissue}')"
 
-VALUE_FILTER['pan-cancer'] = f"suspension_type != 'na'"
+VALUE_FILTER['pan-cancer'] = "suspension_type != 'na'"
 cancer_condition = ""
 for disease in CANCER_LIST:
     if cancer_condition == "":

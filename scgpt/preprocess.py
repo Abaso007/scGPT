@@ -172,9 +172,7 @@ class Preprocessor:
         if self.binning:
             logger.info("Binning data ...")
             if not isinstance(self.binning, int):
-                raise ValueError(
-                    "Binning arg must be an integer, but got {}.".format(self.binning)
-                )
+                raise ValueError(f"Binning arg must be an integer, but got {self.binning}.")
             n_bins = self.binning  # NOTE: the first bin is always a spectial for zero
             binned_rows = []
             bin_edges = []
@@ -230,10 +228,7 @@ class Preprocessor:
             return False
 
         non_zero_min = data[data > 0].min()
-        if non_zero_min >= 1:
-            return False
-
-        return True
+        return non_zero_min < 1
 
 
 def _digitize(x: np.ndarray, bins: np.ndarray, side="both") -> np.ndarray:
@@ -276,7 +271,7 @@ def binning(
 ) -> Union[np.ndarray, torch.Tensor]:
     """Binning the row into n_bins."""
     dtype = row.dtype
-    return_np = False if isinstance(row, torch.Tensor) else True
+    return_np = not isinstance(row, torch.Tensor)
     row = row.cpu().numpy() if isinstance(row, torch.Tensor) else row
     # TODO: use torch.quantile and torch.bucketize
 

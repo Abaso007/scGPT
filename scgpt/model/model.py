@@ -86,24 +86,21 @@ class TransformerModel(nn.Module):
         self.encoder = GeneEncoder(ntoken, d_model, padding_idx=vocab[pad_token])
 
         # Value Encoder, NOTE: the scaling style is also handled in _encode method
-        if input_emb_style == "continuous":
-            self.value_encoder = ContinuousValueEncoder(d_model, dropout)
-        elif input_emb_style == "category":
+        if input_emb_style == "category":
             assert n_input_bins > 0
             self.value_encoder = CategoryValueEncoder(
                 n_input_bins, d_model, padding_idx=pad_value
             )
+        elif input_emb_style == "continuous":
+            self.value_encoder = ContinuousValueEncoder(d_model, dropout)
         else:
             self.value_encoder = nn.Identity()  # nn.Softmax(dim=1)
-            # TODO: consider row-wise normalization or softmax
-            # TODO: Correct handle the mask_value when using scaling
-
         # Batch Encoder
         if use_batch_labels:
             self.batch_encoder = BatchLabelEncoder(num_batch_labels, d_model)
 
         if domain_spec_batchnorm is True or domain_spec_batchnorm == "dsbn":
-            use_affine = True if domain_spec_batchnorm == "do_affine" else False
+            use_affine = domain_spec_batchnorm == "do_affine"
             print(f"Use domain specific batchnorm with affine={use_affine}")
             self.dsbn = DomainSpecificBatchNorm1d(
                 d_model, num_batch_labels, eps=6.1e-5, affine=use_affine
@@ -113,11 +110,7 @@ class TransformerModel(nn.Module):
             self.bn = nn.BatchNorm1d(d_model, eps=6.1e-5)
 
         if use_fast_transformer:
-            if fast_transformer_backend == "linear":
-                self.transformer_encoder = FastTransformerEncoderWrapper(
-                    d_model, nhead, d_hid, nlayers, dropout
-                )
-            elif fast_transformer_backend == "flash":
+            if fast_transformer_backend == "flash":
                 encoder_layers = FlashTransformerEncoderLayer(
                     d_model,
                     nhead,
@@ -127,6 +120,10 @@ class TransformerModel(nn.Module):
                     norm_scheme=self.norm_scheme,
                 )
                 self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+            elif fast_transformer_backend == "linear":
+                self.transformer_encoder = FastTransformerEncoderWrapper(
+                    d_model, nhead, d_hid, nlayers, dropout
+                )
         else:
             encoder_layers = TransformerEncoderLayer(
                 d_model, nhead, d_hid, dropout, batch_first=True
@@ -191,10 +188,9 @@ class TransformerModel(nn.Module):
         elif getattr(self, "bn", None) is not None:
             total_embs = self.bn(total_embs.permute(0, 2, 1)).permute(0, 2, 1)
 
-        output = self.transformer_encoder(
+        return self.transformer_encoder(
             total_embs, src_key_padding_mask=src_key_padding_mask
         )
-        return output  # (batch, seq_len, embsize)
 
     def _get_cell_emb_from_layer(
         self, layer_output: Tensor, weights: Tensor = None
@@ -307,9 +303,7 @@ class TransformerModel(nn.Module):
             ),
             # else transformer_output + batch_emb.unsqueeze(1),
         )
-        output = mlm_output["pred"]  # (batch, seq_len)
-
-        return output  # (batch, seq_len)
+        return mlm_output["pred"]
 
     def forward(
         self,
@@ -588,8 +582,7 @@ class FastTransformerEncoderWrapper(nn.Module):
             )
 
         length_mask = self.build_length_mask(src, src_key_padding_mask)
-        output = self.fast_transformer_encoder(src, length_mask=length_mask)
-        return output
+        return self.fast_transformer_encoder(src, length_mask=length_mask)
 
 
 class FlashTransformerEncoderLayer(nn.Module):
@@ -658,12 +651,12 @@ class FlashTransformerEncoderLayer(nn.Module):
 
     @staticmethod
     def _get_activation_fn(activation):
-        if activation == "relu":
-            return F.relu
-        elif activation == "gelu":
+        if activation == "gelu":
             return F.gelu
 
-        raise RuntimeError("activation should be relu/gelu, not {}".format(activation))
+        elif activation == "relu":
+            return F.relu
+        raise RuntimeError(f"activation should be relu/gelu, not {activation}")
 
     def __setstate__(self, state):
         if "activation" not in state:
@@ -899,7 +892,7 @@ class ClsDecoder(nn.Module):
         super().__init__()
         # module list
         self._decoder = nn.ModuleList()
-        for i in range(nlayers - 1):
+        for _ in range(nlayers - 1):
             self._decoder.append(nn.Linear(d_model, d_model))
             self._decoder.append(activation())
             self._decoder.append(nn.LayerNorm(d_model))
@@ -941,7 +934,7 @@ class MVCDecoder(nn.Module):
         """
         super().__init__()
         d_in = d_model * 2 if use_batch_labels else d_model
-        if arch_style in ["inner product", "inner product, detach"]:
+        if arch_style in {"inner product", "inner product, detach"}:
             self.gene2query = nn.Linear(d_model, d_model)
             self.query_activation = query_activation()
             self.W = nn.Linear(d_model, d_in, bias=False)
@@ -1023,7 +1016,7 @@ class AdversarialDiscriminator(nn.Module):
         super().__init__()
         # module list
         self._decoder = nn.ModuleList()
-        for i in range(nlayers - 1):
+        for _ in range(nlayers - 1):
             self._decoder.append(nn.Linear(d_model, d_model))
             self._decoder.append(activation())
             self._decoder.append(nn.LayerNorm(d_model))

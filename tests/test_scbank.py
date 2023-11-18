@@ -25,11 +25,11 @@ def test_empty_databank():
     db = DataBank()
     assert db.data_tables == {}
     assert db.settings == Setting()
-    assert db.gene_vocab == None
+    assert db.gene_vocab is None
 
     db = DataBank(meta_info=MetaInfo())
     assert db.data_tables == {}
-    assert db.gene_vocab == None
+    assert db.gene_vocab is None
 
     db = DataBank(
         meta_info=MetaInfo(on_disk_path=save_path),

@@ -154,8 +154,7 @@ class GeneVocab(Vocab):
                 ordered_dict.update({symbol: min_freq})
                 ordered_dict.move_to_end(symbol, last=not special_first)
 
-        word_vocab = torch_vocab.vocab(ordered_dict, min_freq=min_freq)
-        return word_vocab
+        return torch_vocab.vocab(ordered_dict, min_freq=min_freq)
 
     @property
     def pad_token(self) -> Optional[str]:
@@ -343,8 +342,8 @@ def pad_batch(
     values_list = []
     mod_types_list = []
 
-    for i in range(len(batch)):
-        gene_ids, values, mod_types = batch[i]
+    for item in batch:
+        gene_ids, values, mod_types = item
 
         if len(gene_ids) > max_len:
             # sample max_len genes
@@ -430,7 +429,7 @@ def tokenize_and_pad_batch(
         cls_id_mod_type=cls_id_mod_type if mod_type is not None else None,
     )
 
-    batch_padded = pad_batch(
+    return pad_batch(
         tokenized_data,
         max_len,
         vocab,
@@ -439,7 +438,6 @@ def tokenize_and_pad_batch(
         cls_appended=append_cls,
         vocab_mod=vocab_mod,
     )
-    return batch_padded
 
 
 def random_mask_value(

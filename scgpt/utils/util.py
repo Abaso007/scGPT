@@ -63,12 +63,7 @@ def isnotebook() -> bool:
     """check whether excuting in jupyter notebook."""
     try:
         shell = get_ipython().__class__.__name__
-        if shell == "ZMQInteractiveShell":
-            return True  # Jupyter notebook or qtconsole
-        elif shell == "TerminalInteractiveShell":
-            return True  # Terminal running IPython
-        else:
-            return False  # Other type (?)
+        return shell in ["ZMQInteractiveShell", "TerminalInteractiveShell"]
     except NameError:
         return False  # Probably standard Python interpreter
 
@@ -89,12 +84,10 @@ def get_free_gpu():
     gpu_df = pd.read_csv(
         StringIO(gpu_stats), names=["memory.used", "memory.free"], skiprows=1
     )
-    print("GPU usage:\n{}".format(gpu_df))
+    print(f"GPU usage:\n{gpu_df}")
     gpu_df["memory.free"] = gpu_df["memory.free"].map(lambda x: int(x.rstrip(" [MiB]")))
     idx = gpu_df["memory.free"].idxmax()
-    print(
-        "Find free GPU{} with {} free MiB".format(idx, gpu_df.iloc[idx]["memory.free"])
-    )
+    print(f'Find free GPU{idx} with {gpu_df.iloc[idx]["memory.free"]} free MiB')
 
     return idx
 
@@ -174,9 +167,7 @@ def _indicate_col_name(adata: AnnData, promt_str: str) -> Optional[str]:
         if col_name == "":
             col_name = None
             break
-        elif col_name in adata.var.columns:
-            break
-        elif col_name in adata.obs.columns:
+        elif col_name in adata.var.columns or col_name in adata.obs.columns:
             break
         else:
             print(f"The column {col_name} is not in the data. " f"Please input again.")
@@ -286,7 +277,7 @@ def map_raw_id_to_vocab_id(
         return_pt = False
         dtype = raw_ids.dtype
     else:
-        raise ValueError(f"raw_ids must be either torch.Tensor or np.ndarray.")
+        raise ValueError("raw_ids must be either torch.Tensor or np.ndarray.")
 
     if raw_ids.ndim != 1:
         raise ValueError(f"raw_ids must be 1d, got {raw_ids.ndim}d.")
@@ -343,8 +334,6 @@ def load_pretrained(
         if verbose:
             for k, v in pretrained_params.items():
                 logger.info(f"Loading parameter {k} with shape {v.shape}")
-        model_dict.update(pretrained_params)
-        model.load_state_dict(model_dict)
     else:
         if verbose:
             for k, v in pretrained_params.items():
@@ -355,9 +344,8 @@ def load_pretrained(
             for k, v in pretrained_params.items()
             if k in model_dict and v.shape == model_dict[k].shape
         }
-        model_dict.update(pretrained_params)
-        model.load_state_dict(model_dict)
-
+    model_dict.update(pretrained_params)
+    model.load_state_dict(model_dict)
     return model
 
 

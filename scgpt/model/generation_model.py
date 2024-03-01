@@ -138,10 +138,9 @@ class TransformerGenerator(nn.Module):
         total_embs = src + values + perts
 
         total_embs = self.bn(total_embs.permute(0, 2, 1)).permute(0, 2, 1)
-        output = self.transformer_encoder(
+        return self.transformer_encoder(
             total_embs, src_key_padding_mask=src_key_padding_mask
         )
-        return output  # (batch, seq_len, embsize)
 
     def _get_cell_emb_from_layer(
         self, layer_output: Tensor, weights: Tensor = None
@@ -303,12 +302,11 @@ class TransformerGenerator(nn.Module):
 
         if include_zero_gene in ["all", "batch-wise"]:
             assert gene_ids is not None
-            if include_zero_gene == "all":
-                input_gene_ids = torch.arange(ori_gene_values.size(1), device=device)
-            else:  # batch-wise
-                input_gene_ids = (
-                    ori_gene_values.nonzero()[:, 1].flatten().unique().sort()[0]
-                )
+            input_gene_ids = (
+                torch.arange(ori_gene_values.size(1), device=device)
+                if include_zero_gene == "all"
+                else ori_gene_values.nonzero()[:, 1].flatten().unique().sort()[0]
+            )
             input_values = ori_gene_values[:, input_gene_ids]
             input_pert_flags = pert_flags[:, input_gene_ids]
 
@@ -412,7 +410,7 @@ class ClsDecoder(nn.Module):
         super().__init__()
         # module list
         self._decoder = nn.ModuleList()
-        for i in range(nlayers - 1):
+        for _ in range(nlayers - 1):
             self._decoder.append(nn.Linear(d_model, d_model))
             self._decoder.append(activation())
             self._decoder.append(nn.LayerNorm(d_model))

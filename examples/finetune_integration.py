@@ -350,7 +350,7 @@ def prepare_dataloader(
         for batch_label in np.unique(batch_labels_array):
             batch_indices = np.where(batch_labels_array == batch_label)[0].tolist()
             subsets.append(batch_indices)
-        data_loader = DataLoader(
+        return DataLoader(
             dataset=dataset,
             batch_sampler=SubsetsBatchSampler(
                 subsets,
@@ -362,9 +362,7 @@ def prepare_dataloader(
             num_workers=num_workers,
             pin_memory=True,
         )
-        return data_loader
-
-    data_loader = DataLoader(
+    return DataLoader(
         dataset=dataset,
         batch_size=batch_size,
         shuffle=shuffle,
@@ -372,7 +370,6 @@ def prepare_dataloader(
         num_workers=num_workers,
         pin_memory=True,
     )
-    return data_loader
 
 
 # %% [markdown]
@@ -473,28 +470,26 @@ def train(model: nn.Module, loader: DataLoader) -> None:
                     output_dict["mlm_zero_probs"], target_values, masked_positions
                 )
                 loss = loss + loss_zero_log_prob
-                metrics_to_log.update({"train/nzlp": loss_zero_log_prob.item()})
+                metrics_to_log["train/nzlp"] = loss_zero_log_prob.item()
             if config.GEPC:
                 loss_gepc = criterion(
                     output_dict["mvc_output"], target_values, masked_positions
                 )
                 loss = loss + loss_gepc
-                metrics_to_log.update({"train/mvc": loss_gepc.item()})
+                metrics_to_log["train/mvc"] = loss_gepc.item()
             if config.GEPC and explicit_zero_prob:
                 loss_gepc_zero_log_prob = criterion_neg_log_bernoulli(
                     output_dict["mvc_zero_probs"], target_values, masked_positions
                 )
                 loss = loss + loss_gepc_zero_log_prob
-                metrics_to_log.update(
-                    {"train/mvc_nzlp": loss_gepc_zero_log_prob.item()}
-                )
+                metrics_to_log["train/mvc_nzlp"] = loss_gepc_zero_log_prob.item()
             if config.ecs_thres > 0:
                 loss_ecs = 10 * output_dict["loss_ecs"]
                 loss = loss + loss_ecs
-                metrics_to_log.update({"train/ecs": loss_ecs.item()})
+                metrics_to_log["train/ecs"] = loss_ecs.item()
             loss_dab = criterion_dab(output_dict["dab_output"], batch_labels)
             loss = loss + config.dab_weight * loss_dab
-            metrics_to_log.update({"train/dab": loss_dab.item()})
+            metrics_to_log["train/dab"] = loss_dab.item()
 
         model.zero_grad()
         scaler.scale(loss).backward()
@@ -504,7 +499,7 @@ def train(model: nn.Module, loader: DataLoader) -> None:
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
                 1.0,
-                error_if_nonfinite=False if scaler.is_enabled() else True,
+                error_if_nonfinite=not scaler.is_enabled(),
             )
             if len(w) > 0:
                 logger.warning(
@@ -763,7 +758,7 @@ for epoch in range(1, config.epochs + 1):
         results["celltype_umap"].savefig(
             save_dir / f"embeddings_celltype_umap[cls]_e{best_model_epoch}.png", dpi=300
         )
-        metrics_to_log = {"test/" + k: v for k, v in results.items()}
+        metrics_to_log = {f"test/{k}": v for k, v in results.items()}
         metrics_to_log["test/batch_umap"] = wandb.Image(
             str(save_dir / f"embeddings_batch_umap[cls]_e{best_model_epoch}.png"),
             caption=f"celltype avg_bio epoch {best_model_epoch}",
@@ -788,7 +783,7 @@ torch.save(best_model.state_dict(), save_dir / "best_model.pt")
 # ## Gene embeddings
 
 # %%
-artifact = wandb.Artifact(f"best_model", type="model")
+artifact = wandb.Artifact("best_model", type="model")
 glob_str = os.path.join(save_dir, "best_model.pt")
 artifact.add_file(glob_str)
 run.log_artifact(artifact)

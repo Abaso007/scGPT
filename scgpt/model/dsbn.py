@@ -67,9 +67,7 @@ class DomainSpecificBatchNorm1d(_DomainSpecificBatchNorm):
 
     def _check_input_dim(self, input: torch.Tensor):
         if input.dim() > 3:
-            raise ValueError(
-                "expected at most 3D input (got {}D input)".format(input.dim())
-            )
+            raise ValueError(f"expected at most 3D input (got {input.dim()}D input)")
 
 
 class DomainSpecificBatchNorm2d(_DomainSpecificBatchNorm):
@@ -79,4 +77,4 @@ class DomainSpecificBatchNorm2d(_DomainSpecificBatchNorm):
 
     def _check_input_dim(self, input: torch.Tensor):
         if input.dim() != 4:
-            raise ValueError("expected 4D input (got {}D input)".format(input.dim()))
+            raise ValueError(f"expected 4D input (got {input.dim()}D input)")

@@ -254,7 +254,7 @@ args = parser.parse_args()
 if args.input_style == "binned":
     if args.input_emb_style == "scaling":
         raise ValueError("input_emb_style `scaling` is not supported for binned input.")
-elif args.input_style == "log1p" or args.input_style == "normed_raw":
+elif args.input_style in ["log1p", "normed_raw"]:
     if args.input_emb_style == "category":
         raise ValueError(
             "input_emb_style `category` is not supported for log1p or normed_raw input."

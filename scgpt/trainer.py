@@ -145,7 +145,7 @@ def prepare_dataloader(
         for batch_label in np.unique(batch_labels_array):
             batch_indices = np.where(batch_labels_array == batch_label)[0].tolist()
             subsets.append(batch_indices)
-        data_loader = DataLoader(
+        return DataLoader(
             dataset=dataset,
             batch_sampler=SubsetsBatchSampler(
                 subsets,
@@ -157,9 +157,7 @@ def prepare_dataloader(
             num_workers=num_workers,
             pin_memory=True,
         )
-        return data_loader
-
-    data_loader = DataLoader(
+    return DataLoader(
         dataset=dataset,
         batch_size=batch_size,
         shuffle=shuffle,
@@ -167,7 +165,6 @@ def prepare_dataloader(
         num_workers=num_workers,
         pin_memory=True,
     )
-    return data_loader
 
 
 def train(
@@ -242,35 +239,33 @@ def train(
                 loss_gep = criterion_gep_gepc(
                     output_dict["mlm_output"], target_values, masked_positions
                 )
-                loss = loss + loss_gep
+                loss += loss_gep
                 metrics_to_log = {"train/gep": loss_gep.item()}
             if config.GEP and config.explicit_zero_prob:
                 loss_zero_log_prob = criterion_neg_log_bernoulli(
                     output_dict["mlm_zero_probs"], target_values, masked_positions
                 )
                 loss = loss + loss_zero_log_prob
-                metrics_to_log.update({"train/nzlp": loss_zero_log_prob.item()})
+                metrics_to_log["train/nzlp"] = loss_zero_log_prob.item()
 
             if config.GEPC:
                 loss_gepc = criterion_gep_gepc(
                     output_dict["mvc_output"], target_values, masked_positions
                 )
                 loss = loss + loss_gepc
-                metrics_to_log.update({"train/mvc": loss_gepc.item()})
+                metrics_to_log["train/mvc"] = loss_gepc.item()
 
             if config.GEPC and config.explicit_zero_prob:
                 loss_gepc_zero_log_prob = criterion_neg_log_bernoulli(
                     output_dict["mvc_zero_probs"], target_values, masked_positions
                 )
                 loss = loss + loss_gepc_zero_log_prob
-                metrics_to_log.update(
-                    {"train/mvc_nzlp": loss_gepc_zero_log_prob.item()}
-                )
+                metrics_to_log["train/mvc_nzlp"] = loss_gepc_zero_log_prob.item()
 
             if config.CLS:
                 loss_cls = criterion_cls(output_dict["cls_output"], celltype_labels)
                 loss = loss + loss_cls
-                metrics_to_log.update({"train/cls": loss_cls.item()})
+                metrics_to_log["train/cls"] = loss_cls.item()
 
                 error_rate = 1 - (
                     (output_dict["cls_output"].argmax(1) == celltype_labels)
@@ -281,13 +276,13 @@ def train(
             if config.ESC:
                 loss_ecs = 10 * output_dict["loss_ecs"]
                 loss = loss + loss_ecs
-                metrics_to_log.update({"train/ecs": loss_ecs.item()})
+                metrics_to_log["train/ecs"] = loss_ecs.item()
 
             if config.DAR:
                 # try weighting and separate optimizer
                 loss_dab = criterion_dab(output_dict["dab_output"], batch_labels)
                 loss = loss + config.dab_weight * loss_dab
-                metrics_to_log.update({"train/dab": loss_dab.item()})
+                metrics_to_log["train/dab"] = loss_dab.item()
 
         model.zero_grad()
         scaler.scale(loss).backward()
@@ -298,7 +293,7 @@ def train(
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
                 1.0,
-                error_if_nonfinite=False if scaler.is_enabled() else True,
+                error_if_nonfinite=not scaler.is_enabled(),
             )
             if len(w) > 0:
                 logger.warning(
